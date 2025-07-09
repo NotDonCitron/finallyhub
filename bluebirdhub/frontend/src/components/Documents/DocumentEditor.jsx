@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { documentService } from '../../services/api';
+import TipTapEditor from '../Editor/TipTapEditor';
+import AIAssistant from '../AI/AIAssistant';
 
 const DocumentEditor = ({ workspaceId }) => {
   const [documents, setDocuments] = useState([]);
@@ -215,6 +217,22 @@ const DocumentEditor = ({ workspaceId }) => {
             ))
           )}
         </div>
+
+        {/* AI Assistant */}
+        <AIAssistant 
+          document={selectedDoc} 
+          onInsertContent={(aiContent) => {
+            const newContent = content + '\n\n' + aiContent;
+            setContent(newContent);
+            if (selectedDoc) {
+              updateDocumentMutation.mutate({
+                id: selectedDoc.id,
+                title,
+                content: newContent
+              });
+            }
+          }}
+        />
       </div>
 
       {/* Main Editor */}
@@ -231,9 +249,9 @@ const DocumentEditor = ({ workspaceId }) => {
             </div>
             
             <div className="editor-content">
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
+              <TipTapEditor
+                content={content}
+                onChange={setContent}
                 placeholder="Beginnen Sie mit dem Schreiben..."
               />
             </div>

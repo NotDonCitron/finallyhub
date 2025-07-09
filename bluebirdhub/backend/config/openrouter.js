@@ -1,17 +1,21 @@
-require('dotenv').config();
-
-const OPENROUTER_CONFIG = {
-  apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+const OpenRouterConfig = {
   apiKey: process.env.OPENROUTER_API_KEY,
+  baseUrl: 'https://openrouter.ai/api/v1',
   models: {
-    default: 'mistralai/mistral-7b-instruct',
-    fast: 'openai/gpt-3.5-turbo',
-    smart: 'openai/gpt-4'
+    fast: 'anthropic/claude-3-haiku',      // Fast and cost-effective
+    balanced: 'anthropic/claude-3-sonnet',  // Balanced performance
+    premium: 'anthropic/claude-3-opus'      // High-quality responses
   },
-  headers: {
-    'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:3000',
-    'X-Title': 'Bluebirdhub'
+  defaultModel: 'anthropic/claude-3-haiku',
+  timeout: 30000,
+  maxTokens: {
+    summary: 150,
+    suggestions: 300,
+    question: 200,
+    outline: 400,
+    improve: 500,
+    generate: 800
   }
 };
 
-module.exports = OPENROUTER_CONFIG;
+module.exports = { OpenRouterConfig };

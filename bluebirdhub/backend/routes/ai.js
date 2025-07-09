@@ -1,230 +1,194 @@
 const express = require('express');
-const axios = require('axios');
-const { verifyToken } = require('../middleware/auth');
-const OPENROUTER_CONFIG = require('../config/openrouter');
 const router = express.Router();
+const aiService = require('../services/aiService');
+const { verifyToken } = require('../middleware/auth');
 
-// AI Text Generation
-router.post('/generate', verifyToken, async (req, res) => {
+// Apply authentication middleware to all AI routes
+router.use(verifyToken);
+
+// Summarize document content
+router.post('/summarize', async (req, res) => {
   try {
-    const { prompt, model = OPENROUTER_CONFIG.models.default, maxTokens = 500 } = req.body;
+    const { content, title = '' } = req.body;
     
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt ist erforderlich' });
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Content is required and cannot be empty' 
+      });
     }
 
-    if (!OPENROUTER_CONFIG.apiKey) {
-      return res.status(503).json({ error: 'KI-Service nicht konfiguriert' });
-    }
-
-    const response = await axios.post(OPENROUTER_CONFIG.apiUrl, {
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: 'Du bist ein hilfreicher Assistent für Projektmanagement und Aufgabenorganisation.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: maxTokens,
-      temperature: 0.7
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_CONFIG.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': OPENROUTER_CONFIG.headers['HTTP-Referer'],
-        'X-Title': OPENROUTER_CONFIG.headers['X-Title']
-      }
+    const summary = await aiService.summarizeDocument(content, title);
+    
+    res.json({ 
+      summary,
+      timestamp: new Date().toISOString()
     });
-
-    res.json({
-      success: true,
-      text: response.data.choices[0].message.content,
-      model: model,
-      usage: response.data.usage
-    });
-
   } catch (error) {
-    console.error('AI API Error:', error.response?.data || error.message);
+    console.error('AI Summarize Error:', error);
     res.status(500).json({ 
-      error: 'KI-Service nicht verfügbar',
-      details: error.response?.data?.error || error.message
+      error: 'Failed to generate summary',
+      details: error.message 
     });
   }
 });
 
-// AI Task Suggestions
-router.post('/suggest-tasks', verifyToken, async (req, res) => {
+// Get improvement suggestions
+router.post('/suggest', async (req, res) => {
   try {
-    const { projectDescription, workspaceContext } = req.body;
+    const { content } = req.body;
     
-    if (!OPENROUTER_CONFIG.apiKey) {
-      return res.status(503).json({ error: 'KI-Service nicht konfiguriert' });
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Content is required and cannot be empty' 
+      });
     }
 
-    const prompt = `
-    Basierend auf der folgenden Projektbeschreibung, erstelle 5-8 konkrete Aufgaben:
+    const suggestions = await aiService.suggestImprovements(content);
     
-    Projekt: ${projectDescription}
-    Kontext: ${workspaceContext || 'Allgemeines Projekt'}
-    
-    Bitte gib die Aufgaben als JSON-Array zurück mit folgender Struktur:
-    [
-      {
-        "title": "Aufgabentitel",
-        "description": "Kurze Beschreibung",
-        "priority": "medium",
-        "estimatedHours": 2
-      }
-    ]
-    `;
-
-    const response = await axios.post(OPENROUTER_CONFIG.apiUrl, {
-      model: OPENROUTER_CONFIG.models.default,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 800,
-      temperature: 0.5
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_CONFIG.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': OPENROUTER_CONFIG.headers['HTTP-Referer'],
-        'X-Title': OPENROUTER_CONFIG.headers['X-Title']
-      }
+    res.json({ 
+      suggestions,
+      timestamp: new Date().toISOString()
     });
-
-    const aiResponse = response.data.choices[0].message.content;
-    
-    // Try to parse JSON from AI response
-    let tasks = [];
-    try {
-      const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        tasks = JSON.parse(jsonMatch[0]);
-      }
-    } catch (parseError) {
-      console.error('JSON Parse Error:', parseError);
-    }
-
-    res.json({
-      success: true,
-      tasks: tasks,
-      rawResponse: aiResponse
-    });
-
   } catch (error) {
-    console.error('AI Task Suggestion Error:', error);
-    res.status(500).json({ error: 'Fehler bei der Aufgabenerstellung' });
+    console.error('AI Suggest Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate suggestions',
+      details: error.message 
+    });
   }
 });
 
-// AI File Auto-Tagging
-router.post('/tag-file', verifyToken, async (req, res) => {
+// Answer question about document
+router.post('/question', async (req, res) => {
   try {
-    const { fileName, fileType, fileContent } = req.body;
+    const { content, question } = req.body;
     
-    if (!OPENROUTER_CONFIG.apiKey) {
-      return res.status(503).json({ error: 'KI-Service nicht konfiguriert' });
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Content is required and cannot be empty' 
+      });
     }
 
-    const prompt = `
-    Analysiere diese Datei und erstelle passende Tags:
+    if (!question || question.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Question is required and cannot be empty' 
+      });
+    }
+
+    const answer = await aiService.answerQuestion(content, question);
     
-    Dateiname: ${fileName}
-    Dateityp: ${fileType}
-    ${fileContent ? `Inhalt: ${fileContent.substring(0, 500)}...` : ''}
-    
-    Erstelle 3-5 relevante Tags für bessere Organisation.
-    Antworte nur mit den Tags, getrennt durch Kommas.
-    `;
-
-    const response = await axios.post(OPENROUTER_CONFIG.apiUrl, {
-      model: OPENROUTER_CONFIG.models.default,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 100,
-      temperature: 0.3
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_CONFIG.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': OPENROUTER_CONFIG.headers['HTTP-Referer'],
-        'X-Title': OPENROUTER_CONFIG.headers['X-Title']
-      }
+    res.json({ 
+      answer,
+      question,
+      timestamp: new Date().toISOString()
     });
-
-    const tagsText = response.data.choices[0].message.content.trim();
-    const tags = tagsText.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-
-    res.json({
-      success: true,
-      tags: tags
-    });
-
   } catch (error) {
-    console.error('AI Tagging Error:', error);
-    res.status(500).json({ error: 'Fehler beim Auto-Tagging' });
+    console.error('AI Question Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to answer question',
+      details: error.message 
+    });
   }
 });
 
-// AI Content Summary
-router.post('/summarize', verifyToken, async (req, res) => {
+// Generate document outline
+router.post('/outline', async (req, res) => {
   try {
-    const { content, maxLength = 200 } = req.body;
+    const { topic, details = '' } = req.body;
     
-    if (!content) {
-      return res.status(400).json({ error: 'Inhalt ist erforderlich' });
+    if (!topic || topic.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Topic is required and cannot be empty' 
+      });
     }
 
-    if (!OPENROUTER_CONFIG.apiKey) {
-      return res.status(503).json({ error: 'KI-Service nicht konfiguriert' });
-    }
-
-    const prompt = `
-    Fasse den folgenden Inhalt in maximal ${maxLength} Zeichen zusammen:
+    const outline = await aiService.generateOutline(topic, details);
     
-    ${content}
-    
-    Erstelle eine prägnante, aussagekräftige Zusammenfassung.
-    `;
-
-    const response = await axios.post(OPENROUTER_CONFIG.apiUrl, {
-      model: OPENROUTER_CONFIG.models.fast,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: Math.ceil(maxLength / 3),
-      temperature: 0.3
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_CONFIG.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': OPENROUTER_CONFIG.headers['HTTP-Referer'],
-        'X-Title': OPENROUTER_CONFIG.headers['X-Title']
-      }
+    res.json({ 
+      outline,
+      topic,
+      timestamp: new Date().toISOString()
     });
-
-    const summary = response.data.choices[0].message.content.trim();
-
-    res.json({
-      success: true,
-      summary: summary,
-      originalLength: content.length,
-      summaryLength: summary.length
-    });
-
   } catch (error) {
-    console.error('AI Summary Error:', error);
-    res.status(500).json({ error: 'Fehler bei der Zusammenfassung' });
+    console.error('AI Outline Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate outline',
+      details: error.message 
+    });
   }
 });
 
-// Check AI service status
-router.get('/status', verifyToken, (req, res) => {
+// Improve writing quality
+router.post('/improve', async (req, res) => {
+  try {
+    const { content } = req.body;
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Content is required and cannot be empty' 
+      });
+    }
+
+    const improvedContent = await aiService.improveWriting(content);
+    
+    res.json({ 
+      improvedContent,
+      originalContent: content,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('AI Improve Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to improve writing',
+      details: error.message 
+    });
+  }
+});
+
+// Generate content
+router.post('/generate', async (req, res) => {
+  try {
+    const { topic, length = 'medium' } = req.body;
+    
+    if (!topic || topic.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Topic is required and cannot be empty' 
+      });
+    }
+
+    const validLengths = ['short', 'medium', 'long'];
+    if (!validLengths.includes(length)) {
+      return res.status(400).json({ 
+        error: 'Length must be one of: short, medium, long' 
+      });
+    }
+
+    const content = await aiService.generateContent(topic, length);
+    
+    res.json({ 
+      content,
+      topic,
+      length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('AI Generate Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate content',
+      details: error.message 
+    });
+  }
+});
+
+// Health check for AI service
+router.get('/status', (req, res) => {
+  const hasApiKey = !!process.env.OPENROUTER_API_KEY;
+  
   res.json({
-    available: !!OPENROUTER_CONFIG.apiKey,
-    models: OPENROUTER_CONFIG.models,
-    configured: !!OPENROUTER_CONFIG.apiKey
+    status: 'ok',
+    aiEnabled: hasApiKey,
+    message: hasApiKey ? 'AI service is configured' : 'AI service requires API key configuration',
+    timestamp: new Date().toISOString()
   });
 });
 

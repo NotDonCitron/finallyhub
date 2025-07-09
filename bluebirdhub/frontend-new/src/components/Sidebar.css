@@ -1,0 +1,32 @@
+.sidebar {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(30, 41, 59, 0.06);
+  border-radius: 12px;
+  padding: 24px 0;
+  width: 220px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  color: #222;
+  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  cursor: pointer;
+}
+
+.sidebar-btn.active,
+.sidebar-btn:hover {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.10);
+}

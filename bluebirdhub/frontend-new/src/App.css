@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+body {
+  background: #F7F8FA;
+  font-family: 'Inter', 'Roboto', sans-serif;
+  color: #222;
+  margin: 0;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 40px;
+  background: #F7F8FA;
+}
+
+.page h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+}
